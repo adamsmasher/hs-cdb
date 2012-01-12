@@ -1,3 +1,19 @@
+-- |
+-- Module      : Database.CDB
+-- Copyright   : (c) Adam Smith 2012
+--
+-- License     : BSD-style
+--
+-- A library for reading CDB (Constant Database) files.
+--
+-- CDB files are immutable key-value stores, designed for extremely fast and
+-- memory-efficient construction and lookup. They can be as large as 4GB, and
+-- at no point in their construction or use must all data be loaded into
+-- memory. CDB files can contain multiple values for a given key.
+--
+-- For more information on the CDB file format, please see:
+--     <http://cr.yp.to/cdb.html>
+
 module Database.CDB (cdbInit, cdbGet, cdbGetAll) where
 
 import Control.Monad
