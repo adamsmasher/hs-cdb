@@ -1,4 +1,4 @@
-module CDB (cdbInit, cdbGet, cdbGetAll) where
+module Database.CDB (cdbInit, cdbGet, cdbGetAll) where
 
 import Control.Monad
 import Data.Bits
@@ -27,7 +27,7 @@ tableLength cdb n = cdb `cdbRead32` ((fromIntegral n * 8) + 4)
 tableOffset :: CDB -> Word8 -> Word32
 tableOffset cdb n = cdb `cdbRead32` (fromIntegral n * 8)
 
--- loads a CDB from a file
+-- |Loads a CDB from a file
 cdbInit :: FilePath -> IO CDB
 cdbInit f = liftM CDB $ unsafeMMapFile f 
 
@@ -37,12 +37,13 @@ cdbHash =
   (foldl' (\h c -> ((h `shiftL` 5) + h) `xor` fromIntegral c) 5381) .
   ByteString.unpack
 
--- finds the first entry associated with a key in a CDB
+-- |Finds the first entry associated with a key in a CDB
 cdbGet    :: CDB -> ByteString -> Maybe ByteString
 cdbGet cdb key = case cdbFind cdb key of
   []    -> Nothing
   (x:_) -> return $ readData cdb x 
 
+-- |Finds all entries associated with a key in a CDB
 cdbGetAll :: CDB -> ByteString -> [ByteString]
 cdbGetAll cdb key = map (readData cdb) (cdbFind cdb key)
  

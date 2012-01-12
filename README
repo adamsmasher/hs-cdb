@@ -1,0 +1,8 @@
+hs-cdb is a library to read (and maybe one day write) CDB files.
+
+For more information on the CDB file format, please consult:
+http://cr.yp.to/cdb.html
+
+TODO:
+writing
+a nicer way to pull words out of the bytestring would be cool

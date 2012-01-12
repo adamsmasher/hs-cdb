@@ -1,0 +1,16 @@
+name:hs-cdb
+version:0.1
+License:BSD3
+License-File:LICENSE
+Author:Adam Smith
+Homepage:http://github.com/adamsmasher/hs-cdb
+Category:Database
+Synopsis:read CDB files
+
+cabal-version: >= 1.2
+build-type:Simple
+
+Library
+  Build-Depends:base, bytestring, bytestring-mmap
+  Exposed-modules:
+    Database.CDB
