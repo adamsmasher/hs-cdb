@@ -16,7 +16,10 @@ You can turn a String into a ByteString with
 Data.ByteString.Char8.pack
 
 TODO:
-writing
-a nicer interface for the common case of using strings as keys/values
-a nicer way to pull words out of the bytestring would be cool
-better documentation
+- writing
+- a nicer interface for the common case of using strings as keys/values
+- a nicer way to pull words out of the bytestring would be cool
+- better documentation
+
+
+Adam
