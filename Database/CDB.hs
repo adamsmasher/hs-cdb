@@ -25,6 +25,28 @@ import Data.List
 import Data.Word
 import System.IO.Posix.MMap
 
+------------
+-- interface
+------------
+
+-- |Loads a CDB from a file
+cdbInit :: FilePath -> IO CDB
+cdbInit f = liftM CDB $ unsafeMMapFile f 
+
+-- |Finds the first entry associated with a key in a CDB
+cdbGet    :: CDB -> ByteString -> Maybe ByteString
+cdbGet cdb key = case cdbFind cdb key of
+  []    -> Nothing
+  (x:_) -> return $ readData cdb x 
+
+-- |Finds all entries associated with a key in a CDB
+cdbGetAll :: CDB -> ByteString -> [ByteString]
+cdbGetAll cdb key = map (readData cdb) (cdbFind cdb key)
+
+-----------------
+-- implementation
+-----------------
+
 data CDB = CDB { cdbMem :: ByteString }
 
 substr :: ByteString -> Int -> Int -> ByteString
@@ -43,9 +65,6 @@ tableLength cdb n = cdb `cdbRead32` ((fromIntegral n * 8) + 4)
 tableOffset :: CDB -> Word8 -> Word32
 tableOffset cdb n = cdb `cdbRead32` (fromIntegral n * 8)
 
--- |Loads a CDB from a file
-cdbInit :: FilePath -> IO CDB
-cdbInit f = liftM CDB $ unsafeMMapFile f 
 
 -- gets the hash value for a key
 cdbHash :: ByteString -> Word32
@@ -53,16 +72,7 @@ cdbHash =
   (foldl' (\h c -> ((h `shiftL` 5) + h) `xor` fromIntegral c) 5381) .
   ByteString.unpack
 
--- |Finds the first entry associated with a key in a CDB
-cdbGet    :: CDB -> ByteString -> Maybe ByteString
-cdbGet cdb key = case cdbFind cdb key of
-  []    -> Nothing
-  (x:_) -> return $ readData cdb x 
 
--- |Finds all entries associated with a key in a CDB
-cdbGetAll :: CDB -> ByteString -> [ByteString]
-cdbGetAll cdb key = map (readData cdb) (cdbFind cdb key)
- 
 -- finds the indices of hash table entries for a given key
 cdbFind :: CDB -> ByteString -> [Word32]
 cdbFind cdb key =
