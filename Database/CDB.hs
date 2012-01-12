@@ -13,51 +13,111 @@
 --
 -- For more information on the CDB file format, please see:
 --     <http://cr.yp.to/cdb.html>
+--
+-- Using @hs-cdb@ should be fairly straightforward. Here's a simple example:
+-- 
+-- >    printStuff :: IO ()
+-- >    printStuff = do
+-- >      cdb <- cdbInit "my.cdb"
+-- >      let foo = cdbGet cdb "foo"
+-- >      let bars = cdbGetAll cdb "bar"
+-- >      putStrLn foo
+-- >      mapM_ putStrLn bars
+--
+-- The CDB will be automatically cleaned up by the garbage collector after use.
+--
+-- The only sticking point may be the use of the 'Packable' and 'Unpackable'
+-- classes. This allows the @hs-cdb@ interface to be both generic (so your CDB
+-- can store effectively any kind of data) but also convenient in the common
+-- case of plaintext data. Internally, @hs-cdb@ uses 'ByteString's, but it will
+-- automatically pack and unpack keys and values to suit the types you're using
+-- in your program. In particular, in an instance is provided for 'String', so
+-- @hs-cdb@ can use 'String's as keys and values transparently.
 
-module Database.CDB (cdbInit, cdbGet, cdbGetAll) where
+{-# LANGUAGE FlexibleInstances #-}
+
+module Database.CDB (
+  -- * The @CDB@ type
+  CDB(),
+  -- * Classes
+  Packable,
+  Unpackable,
+  -- * Interface
+  cdbInit,
+  cdbGet,
+  cdbGetAll) where
 
 import Control.Monad
 import Data.Bits
 import qualified Data.ByteString as ByteString
+import qualified Data.ByteString.Char8 as ByteString.Char8
 import Data.ByteString (ByteString)
 import Data.Char
 import Data.List
 import Data.Word
 import System.IO.Posix.MMap
 
+-- $usage
 ------------
 -- interface
 ------------
 
--- |Loads a CDB from a file
+-- |Internal representation of a CDB file on disk.
+data CDB = CDB { cdbMem :: ByteString }
+
+-- |An instance of 'Packable' can be losslessly transformed into a 'ByteString'.
+class Packable k where
+  pack :: k -> ByteString
+
+-- |An instance of 'Unpackable' can be losslessly transformed from a 'ByteString'.
+class Unpackable v where
+  unpack :: ByteString -> v
+
+instance Packable ByteString where
+  pack = id
+
+instance Unpackable ByteString where
+  unpack = id
+
+instance Packable [Char] where
+  pack = ByteString.Char8.pack
+
+instance Unpackable [Char] where
+  unpack = ByteString.Char8.unpack
+
+instance Packable [Word8] where
+  pack = ByteString.pack
+
+instance Unpackable [Word8] where
+  unpack = ByteString.unpack
+
+-- |Loads a CDB from a file.
 cdbInit :: FilePath -> IO CDB
 cdbInit f = liftM CDB $ unsafeMMapFile f 
 
--- |Finds the first entry associated with a key in a CDB
-cdbGet    :: CDB -> ByteString -> Maybe ByteString
-cdbGet cdb key = case cdbFind cdb key of
+-- |Finds the first entry associated with a key in a CDB.
+cdbGet :: (Packable k, Unpackable v) => CDB -> k -> Maybe v
+cdbGet cdb key = case cdbFind cdb (pack key) of
   []    -> Nothing
-  (x:_) -> return $ readData cdb x 
+  (x:_) -> return $ unpack $ readData cdb x 
 
--- |Finds all entries associated with a key in a CDB
-cdbGetAll :: CDB -> ByteString -> [ByteString]
-cdbGetAll cdb key = map (readData cdb) (cdbFind cdb key)
+-- |Finds all entries associated with a key in a CDB.
+cdbGetAll :: (Packable k, Unpackable v) => CDB -> k -> [v]
+cdbGetAll cdb key = map (unpack . readData cdb) (cdbFind cdb (pack key))
 
 -----------------
 -- implementation
 -----------------
-
-data CDB = CDB { cdbMem :: ByteString }
 
 substr :: ByteString -> Int -> Int -> ByteString
 substr bs i n = ByteString.take n (snd $ ByteString.splitAt i bs)
 
 cdbRead32 :: CDB -> Word32 -> Word32
 cdbRead32 cdb i =
-  bytesToInt $ ByteString.unpack $ substr (cdbMem cdb) (fromIntegral i) 4
+  bytesToWord $ ByteString.unpack $ substr (cdbMem cdb) (fromIntegral i) 4
 
---bytesToInt :: [Word8] -> Word32
-bytesToInt = foldr (\x y -> (y `shiftL` 8) .|. fromIntegral x) 0
+bytesToWord :: [Word8] -> Word32
+bytesToWord = foldr (\x y -> (y `shiftL` 8) .|. fromIntegral x) 0
 
 tableLength :: CDB -> Word8 -> Word32
 tableLength cdb n = cdb `cdbRead32` ((fromIntegral n * 8) + 4)
