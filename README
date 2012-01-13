@@ -3,17 +3,17 @@ hs-cdb is a library to read (and maybe one day write) CDB files.
 For more information on the CDB file format, please consult:
 http://cr.yp.to/cdb.html
 
-the important functions to know are
-
 cdbInit :: FilePath -> IO CDB
 
-cdbGet :: CDB -> ByteString -> Maybe ByteString
-cdbGetAll :: CDB -> ByteString -> [ByteString]
+cdbGet :: (Packable k, Unpackable v) => CDB -> k -> Maybe v
+cdbGetAll :: (Packable k, Unpackable v) => CDB -> k -> [v]
+cdbHasKey :: (Packable k) => CDB -> k -> Bool
+cdbCount :: (Packable k) => CDB -> k -> Int
 
-you can probably guess how these work.
-
-You can turn a String into a ByteString with
-Data.ByteString.Char8.pack
+What these do should be fairly straightforward. ByteString, [Word8], and
+String are all instances of Packable and Unpackable, so you can lookup
+by any of these and the appropriate type will be returned. hs-cdb uses
+ByteStrings internally, so use these for optimum performance.
 
 TODO:
 - writing
