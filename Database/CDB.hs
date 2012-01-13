@@ -21,7 +21,7 @@
 -- >      cdb <- cdbInit "my.cdb"
 -- >      let foo = cdbGet cdb "foo"
 -- >      let bars = cdbGetAll cdb "bar"
--- >      putStrLn foo
+-- >      maybe (putStrLn "Not found") putStrLn foo
 -- >      mapM_ putStrLn bars
 --
 -- The CDB will be automatically cleaned up by the garbage collector after use.
@@ -45,7 +45,9 @@ module Database.CDB (
   -- * Interface
   cdbInit,
   cdbGet,
-  cdbGetAll) where
+  cdbGetAll,
+  cdbHasKey,
+  cdbCount) where
 
 import Control.Monad
 import Data.Bits
@@ -104,6 +106,16 @@ cdbGet cdb key = case cdbFind cdb (pack key) of
 -- |Finds all entries associated with a key in a CDB.
 cdbGetAll :: (Packable k, Unpackable v) => CDB -> k -> [v]
 cdbGetAll cdb key = map (unpack . readData cdb) (cdbFind cdb (pack key))
+
+-- |Returns True if the CDB has a value associated with the given key.
+cdbHasKey :: (Packable k) => CDB -> k -> Bool
+cdbHasKey cdb key = case cdbFind cdb (pack key) of
+  [] -> False
+  _  -> True
+
+-- |Returns the number of values a CDB has for a given key.
+cdbCount :: (Packable k) => CDB -> k -> Int
+cdbCount cdb key = length $ cdbFind cdb (pack key)
 
 -----------------
 -- implementation
