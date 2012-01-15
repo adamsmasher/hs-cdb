@@ -1,7 +1,10 @@
-hs-cdb is a library to read (and maybe one day write) CDB files.
+hs-cdb is a library to read and write CDB files.
 
 For more information on the CDB file format, please consult:
 http://cr.yp.to/cdb.html
+
+The reading interface
+---------------------
 
 cdbInit :: FilePath -> IO CDB
 
@@ -15,8 +18,18 @@ String are all instances of Packable and Unpackable, so you can lookup
 by any of these and the appropriate type will be returned. hs-cdb uses
 ByteStrings internally, so use these for optimum performance.
 
-TODO:
-- writing
-- a nicer way to pull words out of the bytestring would be cool
+The writing interface
+---------------------
+
+cdbMake :: FilePath -> CDBMake -> IO ()
+
+cdbAdd :: (Packable k, Packable v) => k -> v -> CDBMake
+cdbAddMany :: (Packable k, Packable v) => [(k,v)] => CDBMake
+
+Example:
+
+cdbMake "my.cdb" $ do
+  cdbAdd "foo" "data associated with foo"
+  cdbAddMany [("bar", "bar1"), ("bar", "bar2")]
 
 Adam
