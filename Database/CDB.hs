@@ -66,6 +66,7 @@ module Database.CDB (
   cdbAddMany) where
 
 import Control.Applicative
+import Control.Exception
 import Control.Monad
 import Control.Monad.State
 import Data.Array.IO
@@ -76,6 +77,7 @@ import qualified Data.ByteString.Char8 as ByteString.Char8
 import Data.ByteString (ByteString)
 import Data.Char
 import Data.List
+import Data.Maybe
 import Data.Word
 import Directory
 import System.FilePath
@@ -206,19 +208,22 @@ cdbAddSlot k v = do
   let buf = cdbstBuffer cdb
   tableIndex <- liftIO $ readArray (cdbstTablePointers cdb) tableNum
   tl <- liftIO $ readArray (cdbstTableSizes cdb) tableNum
-  slot <- liftIO $ cdbFindEmptySlot buf (tableIndex +
-                                            (hash `div` 256 `mod` tl) * 2)
+  slot <- liftIO $ findEmptySlot buf tableIndex tl hash
   pointer <- liftIO $ fromIntegral <$> hTell (cdbstHandle cdb)
   liftIO $ writeArray buf slot hash
   liftIO $ writeArray buf (slot+1) pointer
 
-cdbFindEmptySlot :: IOUArray Word32 Word32 -> Word32 -> IO Word32
-cdbFindEmptySlot buf i = do
-  pointer <- readArray buf (i+1)
-  case pointer of
-    0 -> return i
-    _ -> cdbFindEmptySlot buf (i+2)
+findEmptySlot buf tableIndex tl hash = do
+  let searchStart = tableIndex + (hash `div` 256 `mod` tl) * 2
+  ibuf <- unsafeFreeze buf
+  let indices = [searchStart, searchStart + 2..(tl-1)*2] ++ 
+                [0, 2..searchStart - 2]
+  let maybeSlot = find (isEmptySlot ibuf) [searchStart, searchStart + 2..] 
+  return $ assert (isJust maybeSlot) (fromJust maybeSlot)
 
+isEmptySlot :: Array Word32 Word32 -> Word32 -> Bool
+isEmptySlot buf i = (buf ! (i+1)) == 0
+ 
 cdbWriteRecord :: ByteString -> ByteString -> CDBMake
 cdbWriteRecord k v = 
   let lk  = fromIntegral $ ByteString.length k
