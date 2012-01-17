@@ -251,7 +251,6 @@ writeSlot :: IOUArray Word32 Word32 -> Word32 -> Int -> CDBSlot -> IO ()
 writeSlot buf bufOffset tableLength (hash, pointer) = do
   ibuf <- unsafeFreeze buf
   let slot = findEmptySlot ibuf bufOffset tableLength hash
-  putStrLn $ "writing " ++ (show hash) ++ " to " ++ (show slot)
   writeArray buf slot hash
   writeArray buf (slot+1) pointer
 
