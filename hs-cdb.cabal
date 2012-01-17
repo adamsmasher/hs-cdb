@@ -21,7 +21,7 @@ cabal-version: >= 1.2
 build-type:Simple
 
 Library
-  Build-Depends:array, base, bytestring, bytestring-mmap, filepath, haskell98,
-                mtl
+  Build-Depends:array, base, bytestring, bytestring-mmap, directory, filepath,
+                haskell98,mtl
   Exposed-modules:
     Database.CDB
