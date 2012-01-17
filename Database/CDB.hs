@@ -66,7 +66,6 @@ module Database.CDB (
   cdbAddMany) where
 
 import Control.Applicative
-import Control.Exception
 import Control.Monad
 import Control.Monad.State
 import Data.Array.IO
@@ -75,12 +74,11 @@ import Data.Bits
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as ByteString.Char8
 import Data.ByteString (ByteString)
-import Data.Char
 import Data.IORef
 import Data.List
 import Data.Maybe
 import Data.Word
-import Directory
+import System.Directory
 import System.FilePath
 import System.IO
 import System.IO.Posix.MMap
@@ -192,7 +190,7 @@ type CDBSlot = (Word32, Word32)
 initialMakeState :: Handle -> IO CDBMakeState
 initialMakeState h = do
   tables <- newArray (0, 255) []
-  return $ CDBMakeState {
+  return CDBMakeState {
     cdbstTables     = tables,
     cdbstRecordsEnd = 256*8,
     cdbstHandle     = h
@@ -218,7 +216,7 @@ cdbWriteRecord k v =
   in do
     cdb <- get
     liftIO $ ByteString.hPut (cdbstHandle cdb) record
-    put $ cdb { cdbstRecordsEnd = (cdbstRecordsEnd cdb) + lk + lv + 8 }
+    put $ cdb { cdbstRecordsEnd = cdbstRecordsEnd cdb + lk + lv + 8 }
 
 -- assumes the Handle is pointing to right after the last record written
 writeHashTables :: Handle -> [[CDBSlot]] -> IO ()
@@ -228,7 +226,7 @@ writeHashTables h tables = do
   buf <- newArray (0, bufSize-1) 0 
   bufOffset <- newIORef 0
   pointers <- mapM (writeTable buf bufOffset tableBase) tables
-  ibuf <- (unsafeFreeze buf) :: IO (Array Word32 Word32)
+  ibuf <- unsafeFreeze buf :: IO (Array Word32 Word32)
   ByteString.hPut h (pack ibuf)
   writePointers h pointers
 
@@ -240,12 +238,12 @@ writeTable :: IOUArray Word32 Word32 ->
 writeTable buf bufOffset tableBase table = do
   -- compute the number of slots
   -- twice the number of actual entries to help prevent collision
-  let tableLength = (length table) * 2
+  let tableLength = length table * 2
   pointer <- readIORef bufOffset 
   -- write the slots in the order they came in
   mapM_ (writeSlot buf pointer tableLength) (reverse table)
-  writeIORef bufOffset $ pointer + (fromIntegral tableLength)*2
-  return $ (pointer*4 + tableBase, (fromIntegral tableLength))
+  writeIORef bufOffset $ pointer + fromIntegral tableLength * 2
+  return (pointer * 4 + tableBase, fromIntegral tableLength)
 
 writeSlot :: IOUArray Word32 Word32 -> Word32 -> Int -> CDBSlot -> IO ()
 writeSlot buf bufOffset tableLength (hash, pointer) = do
@@ -299,7 +297,7 @@ tableOffset cdb n = cdb `cdbRead32` (fromIntegral n * 8)
 -- gets the hash value for a key
 cdbHash :: ByteString -> Word32
 cdbHash =
-  (foldl' (\h c -> ((h `shiftL` 5) + h) `xor` fromIntegral c) 5381) .
+  foldl' (\h c -> ((h `shiftL` 5) + h) `xor` fromIntegral c) 5381 .
   ByteString.unpack
 
 
@@ -318,7 +316,7 @@ cdbFind cdb key =
                 Just (recordOffset, hash') ->
                   let nextSlot = (slotNum + 1) `mod` tl in
                   if hash == hash' && key == readKey cdb recordOffset
-                    then recordOffset : (linearSearch nextSlot)
+                    then recordOffset : linearSearch nextSlot
                     else linearSearch nextSlot
                 Nothing -> []
           in
@@ -327,7 +325,7 @@ cdbFind cdb key =
 -- returns a tuple (offset, hash) if the slot contains anything
 probe :: CDB -> Word8 -> Word32 -> Maybe (Word32, Word32)
 probe cdb tableNum slotNum =
-  let offset       = (tableOffset cdb tableNum) + (slotNum * 8)
+  let offset       = tableOffset cdb tableNum + (slotNum * 8)
       recordOffset = cdb `cdbRead32` (offset + 4)
   in
   if recordOffset == 0 then Nothing
