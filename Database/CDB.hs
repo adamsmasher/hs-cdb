@@ -76,6 +76,7 @@ import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as ByteString.Char8
 import Data.ByteString (ByteString)
 import Data.Char
+import Data.IORef
 import Data.List
 import Data.Maybe
 import Data.Word
@@ -158,7 +159,9 @@ cdbMake fileName f = do
   hSeek h AbsoluteSeek (256*8)
   initState <- initialMakeState h
   cdb <- execStateT f initState
-  writeHashTables cdb
+  tablesArrays <- unsafeFreeze (cdbstTables cdb)
+  let tables = elems (tablesArrays :: Array Word8 [CDBSlot])
+  writeHashTables h tables
   hClose h
   renameFile tmp fileName
 
@@ -179,24 +182,20 @@ cdbAddMany = mapM_ (uncurry cdbAdd)
 type CDBMake = StateT CDBMakeState IO ()
 
 data CDBMakeState = CDBMakeState {
-  cdbstBuffer        :: IOUArray Word32 Word32,
-  cdbstTablePointers :: IOUArray Word8 Word32,
-  cdbstTableSizes    :: IOUArray Word8 Word32,
   cdbstHandle        :: Handle,
-  cdbstRecordsEnd    :: Word32
+  cdbstRecordsEnd    :: Word32,
+  cdbstTables        :: IOArray Word8 [CDBSlot] 
 }
+
+type CDBSlot = (Word32, Word32)
 
 initialMakeState :: Handle -> IO CDBMakeState
 initialMakeState h = do
-  buf <- newArray (0, 256*512) 0
-  tableSizes <- newArray (0, 255) 256
-  pointers <- newListArray (0, 255) [0, (256*2)..]
+  tables <- newArray (0, 255) []
   return $ CDBMakeState {
-    cdbstBuffer        = buf,
-    cdbstTableSizes    = tableSizes,
-    cdbstTablePointers = pointers,
-    cdbstRecordsEnd    = 256*8,
-    cdbstHandle        = h
+    cdbstTables     = tables,
+    cdbstRecordsEnd = 256*8,
+    cdbstHandle     = h
   }
 
 -- add a slot to the set of slots
@@ -205,25 +204,12 @@ cdbAddSlot k v = do
   let hash     = cdbHash k
   let tableNum = fromIntegral $ hash `mod` 256
   cdb <- get
-  let buf = cdbstBuffer cdb
-  tableIndex <- liftIO $ readArray (cdbstTablePointers cdb) tableNum
-  tl <- liftIO $ readArray (cdbstTableSizes cdb) tableNum
-  slot <- liftIO $ findEmptySlot buf tableIndex tl hash
   pointer <- liftIO $ fromIntegral <$> hTell (cdbstHandle cdb)
-  liftIO $ writeArray buf slot hash
-  liftIO $ writeArray buf (slot+1) pointer
+  let tables = cdbstTables cdb
+  oldTable <- liftIO $ readArray tables tableNum
+  liftIO $ writeArray tables tableNum $ (hash, pointer):oldTable
 
-findEmptySlot buf tableIndex tl hash = do
-  let searchStart = tableIndex + (hash `div` 256 `mod` tl) * 2
-  ibuf <- unsafeFreeze buf
-  let indices = [searchStart, searchStart + 2..(tl-1)*2] ++ 
-                [0, 2..searchStart - 2]
-  let maybeSlot = find (isEmptySlot ibuf) [searchStart, searchStart + 2..] 
-  return $ assert (isJust maybeSlot) (fromJust maybeSlot)
 
-isEmptySlot :: Array Word32 Word32 -> Word32 -> Bool
-isEmptySlot buf i = (buf ! (i+1)) == 0
- 
 cdbWriteRecord :: ByteString -> ByteString -> CDBMake
 cdbWriteRecord k v = 
   let lk  = fromIntegral $ ByteString.length k
@@ -235,36 +221,64 @@ cdbWriteRecord k v =
     put $ cdb { cdbstRecordsEnd = (cdbstRecordsEnd cdb) + lk + lv + 8 }
 
 -- assumes the Handle is pointing to right after the last record written
-writeHashTables :: CDBMakeState -> IO ()
-writeHashTables cdb = do
-  writeHashTables' cdb
-  writePointers cdb
+writeHashTables :: Handle -> [[CDBSlot]] -> IO ()
+writeHashTables h tables = do
+  tableBase <- fromIntegral <$> hTell h
+  let bufSize = fromIntegral $ (*4)  $ sum (map length tables)
+  buf <- newArray (0, bufSize-1) 0 
+  bufOffset <- newIORef 0
+  pointers <- mapM (writeTable buf bufOffset tableBase) tables
+  ibuf <- (unsafeFreeze buf) :: IO (Array Word32 Word32)
+  ByteString.hPut h (pack ibuf)
+  writePointers h pointers
 
--- writes the Hash Tables specficially, not the pointers
-writeHashTables' :: CDBMakeState -> IO ()
-writeHashTables' cdb = do
-  buf <- freeze $ cdbstBuffer cdb
-  ByteString.hPut (cdbstHandle cdb) (pack (buf :: Array Word32 Word32))
+writeTable :: IOUArray Word32 Word32 ->
+              IORef Word32 ->
+              Word32 ->
+              [CDBSlot] ->
+              IO (Word32, Word32)
+writeTable buf bufOffset tableBase table = do
+  -- compute the number of slots
+  -- twice the number of actual entries to help prevent collision
+  let tableLength = (length table) * 2
+  pointer <- readIORef bufOffset 
+  -- write the slots in the order they came in
+  mapM_ (writeSlot buf pointer tableLength) (reverse table)
+  writeIORef bufOffset $ pointer + (fromIntegral tableLength)*2
+  return $ (pointer*4 + tableBase, (fromIntegral tableLength))
 
-writePointers :: CDBMakeState -> IO ()
-writePointers cdb = do
-  hSeek (cdbstHandle cdb) AbsoluteSeek 0
-  pointers <- map ((+(cdbstRecordsEnd cdb)) . (*4))  <$>
-              elems <$>
-              (freeze (cdbstTablePointers cdb) :: IO (Array Word8 Word32))
-  sizes    <- elems <$>
-              (freeze (cdbstTableSizes cdb) :: IO (Array Word8 Word32))
-  mapM_ (writePointer $ cdbstHandle cdb) (zip pointers sizes)
+writeSlot :: IOUArray Word32 Word32 -> Word32 -> Int -> CDBSlot -> IO ()
+writeSlot buf bufOffset tableLength (hash, pointer) = do
+  ibuf <- unsafeFreeze buf
+  let slot = findEmptySlot ibuf bufOffset tableLength hash
+  putStrLn $ "writing " ++ (show hash) ++ " to " ++ (show slot)
+  writeArray buf slot hash
+  writeArray buf (slot+1) pointer
 
--- writes to the given Handle a pointer to the given hashtable
--- assumes the handle is pointing to the right place
-writePointer :: Handle -> (Word32, Word32) -> IO ()
-writePointer h (pos, len) = do
-  ByteString.hPut h (pack pos) -- write pointer
-  ByteString.hPut h $ pack ((fromIntegral len) :: Word32)  -- write length
+findEmptySlot :: Array Word32 Word32 -> Word32 -> Int -> Word32 -> Word32
+findEmptySlot buf bufOffset tl hash =
+  let tl' = fromIntegral tl
+      searchStart = bufOffset + (hash `div` 256 `mod` tl') * 2
+      indices = [searchStart, searchStart + 2..(tl'-1)*2] ++
+                [0, 2..searchStart - 2]
+      maybeSlot = find (isEmptySlot buf) indices
+  in
+  fromMaybe 
+    (error "fatal internal error: could not find empty slot in table")
+    maybeSlot
+
+isEmptySlot :: Array Word32 Word32 -> Word32 -> Bool
+isEmptySlot buf i = (buf ! (i+1)) == 0
+   
+writePointers :: Handle -> [(Word32, Word32)] -> IO ()
+writePointers h pointers = do
+  hSeek h AbsoluteSeek 0
+  mapM_ (\(pointer, tableLength) -> do ByteString.hPut h (pack pointer)
+                                       ByteString.hPut h (pack tableLength))
+        pointers
 
 -----------------
--- implementation
+-- read implementation
 -----------------
 
 substr :: ByteString -> Int -> Int -> ByteString
@@ -303,9 +317,10 @@ cdbFind cdb key =
           let slotNum = hash `div` 256 `mod` tl
               linearSearch slotNum = case probe cdb tableNum slotNum of
                 Just (recordOffset, hash') ->
+                  let nextSlot = (slotNum + 1) `mod` tl in
                   if hash == hash' && key == readKey cdb recordOffset
-                    then recordOffset : (linearSearch $ slotNum + 1)
-                    else linearSearch (slotNum + 1)
+                    then recordOffset : (linearSearch nextSlot)
+                    else linearSearch nextSlot
                 Nothing -> []
           in
           linearSearch slotNum
