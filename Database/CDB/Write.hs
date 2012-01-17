@@ -7,8 +7,8 @@ module Database.CDB.Write (
 import Control.Applicative
 import Control.Monad
 import Control.Monad.State
-import Data.Array
 import Data.Array.IO
+import Data.Array.Unboxed
 import qualified Data.ByteString as ByteString
 import Data.ByteString (ByteString)
 import Data.IORef
@@ -28,8 +28,8 @@ cdbMake fileName f = do
   hSeek h AbsoluteSeek (256*8)
   initState <- initialMakeState h
   cdb <- execStateT f initState
-  tablesArrays <- unsafeFreeze (cdbstTables cdb)
-  let tables = elems (tablesArrays :: Array Word8 [CDBSlot])
+  tablesArrays <- unsafeFreeze (cdbstTables cdb) :: IO (Array Word8 [CDBSlot])
+  let tables = elems tablesArrays
   writeHashTables h tables
   hClose h
   renameFile tmp fileName
@@ -97,7 +97,7 @@ writeHashTables h tables = do
   buf <- newArray (0, bufSize-1) 0 
   bufOffset <- newIORef 0
   pointers <- mapM (writeTable buf bufOffset tableBase) tables
-  ibuf <- unsafeFreeze buf :: IO (Array Word32 Word32)
+  ibuf <- unsafeFreeze buf :: IO (UArray Word32 Word32)
   ByteString.hPut h (pack ibuf)
   writePointers h pointers
 
@@ -123,7 +123,7 @@ writeSlot buf bufOffset tableLength (hash, pointer) = do
   writeArray buf slot hash
   writeArray buf (slot+1) pointer
 
-findEmptySlot :: Array Word32 Word32 -> Word32 -> Int -> Word32 -> Word32
+findEmptySlot :: UArray Word32 Word32 -> Word32 -> Int -> Word32 -> Word32
 findEmptySlot buf bufOffset tl hash =
   let tl' = fromIntegral tl
       searchStart = bufOffset + (hash `div` 256 `mod` tl') * 2
@@ -135,7 +135,7 @@ findEmptySlot buf bufOffset tl hash =
     (error "fatal internal error: could not find empty slot in table")
     maybeSlot
 
-isEmptySlot :: Array Word32 Word32 -> Word32 -> Bool
+isEmptySlot :: UArray Word32 Word32 -> Word32 -> Bool
 isEmptySlot buf i = (buf ! (i+1)) == 0
    
 writePointers :: Handle -> [(Word32, Word32)] -> IO ()

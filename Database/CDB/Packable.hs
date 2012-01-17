@@ -7,7 +7,7 @@ module Database.CDB.Packable (
   unpack
 ) where
 
-import Data.Array
+import Data.Array.Unboxed
 import Data.Bits
 import qualified Data.ByteString as ByteString
 import Data.ByteString (ByteString)
@@ -47,6 +47,6 @@ instance Packable Word32 where
     (n `shiftR` 16) .&. 0xFF,
     (n `shiftR` 24) .&. 0xFF]
 
-instance Packable (Array Word32 Word32) where
+instance Packable (UArray Word32 Word32) where
   pack t = pack $ ByteString.concat $ map pack $ elems t
 
