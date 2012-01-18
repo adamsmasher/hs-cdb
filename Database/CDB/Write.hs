@@ -73,7 +73,7 @@ cdbAddSlot k v = do
   let hash     = cdbHash k
   let tableNum = fromIntegral $ hash `mod` 256
   cdb <- get
-  pointer <- liftIO $ fromIntegral <$> hTell (cdbstHandle cdb)
+  let pointer = cdbstRecordsEnd cdb
   let tables = cdbstTables cdb
   oldTable <- liftIO $ readArray tables tableNum
   liftIO $ writeArray tables tableNum $ (hash, pointer):oldTable
