@@ -126,18 +126,13 @@ writeSlot buf bufOffset tableLength (hash, pointer) = do
 findEmptySlot :: UArray Word32 Word32 -> Word32 -> Int -> Word32 -> Word32
 findEmptySlot buf bufOffset tl hash =
   let tl' = fromIntegral tl
-      searchStart = bufOffset + (hash `div` 256 `mod` tl') * 2
-      indices = [searchStart, searchStart + 2..(tl'-1)*2] ++
-                [0, 2..searchStart - 2]
-      maybeSlot = find (isEmptySlot buf) indices
+      searchStart = (hash `div` 256 `mod` tl') * 2
+      linearSearch i = if buf ! (bufOffset+i+1) == 0
+                         then bufOffset + i
+                         else linearSearch $ (i + 2) `mod` (tl' * 2)
   in
-  fromMaybe 
-    (error "fatal internal error: could not find empty slot in table")
-    maybeSlot
+  linearSearch searchStart
 
-isEmptySlot :: UArray Word32 Word32 -> Word32 -> Bool
-isEmptySlot buf i = (buf ! (i+1)) == 0
-   
 writePointers :: Handle -> [(Word32, Word32)] -> IO ()
 writePointers h pointers = do
   hSeek h AbsoluteSeek 0
