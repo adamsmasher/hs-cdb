@@ -33,4 +33,4 @@ Library
 
 source-repository head
   type: git
-  location: http://github.com/adamsmasher/hs-cdb
+  location: git://github.com/adamsmasher/hs-cdb.git
