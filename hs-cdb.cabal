@@ -3,6 +3,7 @@ version:0.1
 License:BSD3
 License-File:LICENSE
 Author:Adam Smith
+Maintainer:Adam Smith
 Homepage:http://github.com/adamsmasher/hs-cdb
 Category:Database
 Synopsis: A library for reading CDB (Constant Database) files.
@@ -17,11 +18,19 @@ Description:
     For more information on the CDB file format, please see:
         <http://cr.yp.to/cdb.html>
     
-cabal-version: >= 1.2
+cabal-version: >= 1.6
 build-type:Simple
 
 Library
-  Build-Depends:array, base, bytestring, bytestring-mmap, directory, filepath,
-                haskell98,mtl
+  Build-Depends:array, base >= 4 && < 5, bytestring, bytestring-mmap, directory,
+                filepath, haskell98, mtl
   Exposed-modules:
     Database.CDB
+    Database.CDB.Packable
+    Database.CDB.Read
+    Database.CDB.Util
+    Database.CDB.Write
+
+source-repository head
+  type: git
+  location: http://github.com/adamsmasher/hs-cdb
