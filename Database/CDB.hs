@@ -45,6 +45,9 @@
 -- tradition, @hs-cdb@ actually creates a CDB named @file.cdb@ by first writing 
 -- it to @file.cdb.tmp@, and then atomically renaming it over @file.cdb@. This
 -- means that readers never need to pause when you're regenerating a CDB.
+--
+-- Note that the CDBMake monad is nothing more than a State wrapper around the
+-- IO monad, so you can use IO commands with liftIO from Control.Monad.State.
 
 
 module Database.CDB (

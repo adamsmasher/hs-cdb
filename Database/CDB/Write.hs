@@ -1,4 +1,5 @@
 module Database.CDB.Write (
+  CDBMake(),
   cdbMake,
   cdbAdd,
   cdbAddMany
@@ -21,6 +22,9 @@ import System.Directory
 import System.FilePath
 import System.IO
 
+-- |Construct a CDB as described inside the supplied CDBMake computation.
+--  During construction, it will be written to a temporary file and then
+--  moved over top of the given file atomically.
 cdbMake :: FilePath -> CDBMake -> IO ()
 cdbMake fileName f = do
   let tmp = fileName <.> "tmp"
@@ -34,13 +38,14 @@ cdbMake fileName f = do
   hClose h
   renameFile tmp fileName
 
--- |Adds a given key-value pair to a CDB
+-- |Adds a given key-value pair to the CDB being built.
 cdbAdd :: (Packable k, Packable v) => k -> v -> CDBMake
 cdbAdd k v = do
   let (pk, pv) = (pack k, pack v)
   cdbAddSlot pk pv
   cdbWriteRecord pk pv
 
+-- |Add a list of key-value pairs to the CDB being built.
 cdbAddMany :: (Packable k, Packable v) => [(k,v)] -> CDBMake
 cdbAddMany = mapM_ (uncurry cdbAdd)
 
