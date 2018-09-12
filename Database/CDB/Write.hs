@@ -10,6 +10,7 @@ import Control.Monad
 import Control.Monad.State
 import Data.Array.IO
 import Data.Array.Unboxed
+import Data.Array.Unsafe (unsafeFreeze)
 import qualified Data.ByteString as ByteString
 import Data.ByteString (ByteString)
 import Data.IORef
