@@ -14,14 +14,14 @@ import Data.ByteString (ByteString)
 import Data.Word
 import Database.CDB.Packable
 import Database.CDB.Util
-import System.IO.Posix.MMap
+import System.IO.MMap
 
 -- |Internal representation of a CDB file on disk.
 data CDB = CDB { cdbMem :: ByteString }
 
 -- |Loads a CDB from a file.
 cdbInit :: FilePath -> IO CDB
-cdbInit f = liftM CDB $ unsafeMMapFile f 
+cdbInit f = liftM CDB $ mmapFileByteString f Nothing
 
 -- |Finds the first entry associated with a key in a CDB.
 cdbGet :: (Packable k, Unpackable v) => CDB -> k -> Maybe v
