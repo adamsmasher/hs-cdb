@@ -18,12 +18,12 @@ Description:
     For more information on the CDB file format, please see:
         <http://cr.yp.to/cdb.html>
     
-cabal-version: >= 1.6
+cabal-version: >= 1.8
 build-type:Simple
 
 Library
-  Build-Depends:array, base >= 4 && < 5, bytestring, bytestring-mmap, directory,
-                filepath, mtl
+  Build-Depends: array >= 0.4.0, base >= 4 && < 5, bytestring, mmap,
+    directory, filepath, mtl
   Exposed-modules:
     Database.CDB
     Database.CDB.Packable
