@@ -1,5 +1,5 @@
 name:hs-cdb
-version:0.1.1
+version:0.1.2
 License:BSD3
 License-File:LICENSE
 Author:Adam Smith
@@ -18,7 +18,7 @@ Description:
     For more information on the CDB file format, please see:
         <http://cr.yp.to/cdb.html>
     
-cabal-version: >= 1.8
+cabal-version: >= 1.10
 build-type:Simple
 
 Library
@@ -30,6 +30,7 @@ Library
     Database.CDB.Read
     Database.CDB.Util
     Database.CDB.Write
+  default-language: Haskell98
 
 source-repository head
   type: git
